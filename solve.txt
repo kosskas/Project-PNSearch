@@ -1,0 +1,27 @@
+if (root->proof == 0) {
+        printf("FIRST_PLAYER_WINS\n");
+        /*
+        if (player == FIRST_PLAYER)
+            printf("FIRST_PLAYER_WINS\n");
+        else
+            printf("SECOND_PLAYER_WINS\n");
+            */
+    }
+    else {
+        delete root;
+        root = new Node(Type::OR, nullptr, map, N, M, K, player);
+        PN2(root);
+        if (root->proof == 0) {
+            printf("BOTH_PLAYERS_TIE\n");
+        }
+        else {
+            printf("SECOND_PLAYER_WINS\n");
+            /*
+            if (player == FIRST_PLAYER)
+                printf("SECOND_PLAYER_WIN1S\n");
+            else
+                printf("FIRST_PLAYER_WINS\n");
+            */
+        } 
+    }
+    delete root;
