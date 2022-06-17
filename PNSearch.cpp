@@ -1,15 +1,7 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
-#include <iostream>
-#include <string.h>
 #include <cstdio>
 
-using namespace std;
-
-#define checkString(a, b) (strcmp(a, b) == 0)
-#define __MAX_CMD_LENGTH__ 100
-#define __max__(a, b) (a > b ? a : b)
-#define __min__(a, b) (a < b ? a : b)
-#define __INFINITY__ 1000
+#define __INFINITY__ 1000000007
 
 enum Position {
     EMPTY = '0',
@@ -17,31 +9,41 @@ enum Position {
     SECOND_PLAYER = '2'
 };
 
-enum class Type {
+enum Type {
     AND,
     OR
 };
 
-enum class Result {
+enum Result {
     UNKNOWN = -1,
     FALSE,
     TRUE
 };
 
+struct Game {
+    int n, m, k;
+    char player;
+    char** map = NULL;
+
+    Game(int n, int m, int k, char player, char** map);
+    ~Game();
+};
+
 struct Node {
-    Node* parent = nullptr;
-    Node* children = nullptr;
-    Node* sibling = nullptr;
-    char** state = nullptr;
-    int n, m, k = 0;
+    Game* game = NULL;
+    Node* parent = NULL;
+    Node* children = NULL;
+    Node* sibling = NULL;
     int proof = 1;
     int disproof = 1;
-    Result value = Result::UNKNOWN;
-    Type type = Type::OR;
+    int value = UNKNOWN;
     bool expanded = false;
-    char player = FIRST_PLAYER;
-    Node(Type type, Node* parent, char** state, int N, int M, int K, char player);
-    Node(Type type, Node* parent, char player);
+    int type = OR;
+    char** state = NULL;
+    char player;
+
+    Node(Game* G, int type, Node* parent, char** state, char player);
+    Node(int type, Node* parent, char player);
     void addChild(Node* node);
     void deleteSubtree();
     ~Node();
@@ -49,7 +51,6 @@ struct Node {
 
 char** createMap(int n, int m);
 void freeMemory(char** map, int n);
-void printMap(char** map, int n, int m);
 bool checkWinCond(char** map, int N, int M, int K, char ActivePlayer);
 bool checkHorizontalAxis(char** map, int N, int M, int K, char ActivePlayer);
 bool checkVerticalAxis(char** map, int N, int M, int K, char ActivePlayer);
@@ -58,87 +59,93 @@ bool checkDiagonalsAxis(char** map, int N, int M, int K, char ActivePlayer);
 bool checkAntiDiagonalsAxis(char** map, int N, int M, int K, char ActivePlayer);
 int countPosMoves(char** map, int N, int M);
 char changePlayer(char ActivePlayer);
-void solveGame(char** map, int N, int M, int K, char player);
-char** cpyMap(char**map, int N, int M);
+void solveGame(Game* G);
+char** cpyMap(char** map, int N, int M);
 
+void PN(Node* root, void(*evaluate)(Node*));
 void setProofAndDisproofNumbers(Node* node);
-Node* updateAncestors(Node* node, Node* root);
 Node* selectMostProvingNode(Node* node);
-void evaluateWin(Node* root);
-void evaluateTie(Node* root);
+void expandNode(Node* node, void(*evaluate)(Node*));
+Node* updateAncestors(Node* node, Node* root);
 void generateAllChildren(Node* node);
-void expandNode(Node* node, void (*evaluate)(Node*));
-void PN(Node* root, void (*evaluate)(Node*));
-
-char activeP;
+void evaluateWin(Node* node);
+void evaluateTie(Node* node);
 
 int main() {
-    int N = 0, M = 0, K = 0;
+    int N = 1, M = 1, K = 1;
     char player = FIRST_PLAYER;
-    char** map = nullptr;
-    char command[__MAX_CMD_LENGTH__];
+    char** map = NULL;
     while (true) {
-        //scanf("SOLVE_GAME_STATE %d %d %d %c\n", &N, &M, &K, &player);
-        cin >> command >> N >> M >> K >> player;
+        scanf("SOLVE_GAME_STATE %d %d %d %c\n", &N, &M, &K, &player);
         if (feof(stdin) != 0) {
             break;
         }
-        activeP = player;
         map = createMap(N, M);
         for (int y = 0; y < N; y++) {
             for (int x = 0; x < M; x++) {
-                cin >> map[y][x];
-               // scanf("%c ", &map[y][x]);
+                scanf("%c ", &map[y][x]);
             }
         }
-        solveGame(map, N, M, K, player);
-        freeMemory(map, N);
+        Game* G = new Game(N, M, K, player, map);
+        solveGame(G);
+        delete G;
     }
     return 0;
 }
 
-Node::Node(Type type, Node* parent, char** state, int N, int M, int K, char player)
-    : type(type), parent(parent), state(cpyMap(state, N, M)) {
-    n = N;
-    m = M;
-    k = K;
-    this->player = player;
-}
+Game::Game(int n, int m, int k, char player, char** map)
+    : n(n), m(m), k(k), player(player), map(map) {}
 
-Node::Node(Type type, Node* parent, char player)
-    : type(type), parent(parent), state(cpyMap(parent->state, parent->n, parent->m)) {
-    n = parent->n;
-    m = parent->k;
-    k = parent->k;
-    this->player = player;
-}
-
-Node::~Node() {
-    if (state)
-        freeMemory(state, n);
-    deleteSubtree();
-}
-
-void Node::addChild(Node*node) {
-    if (children == nullptr) {
-        children = node;
+Game::~Game() {
+    if (map) {
+        freeMemory(map, n);
+        map = NULL;
     }
+}
+
+Node::Node(Game* G, int type, Node* parent, char** state, char player) {
+    this->game = G;
+    this->parent = parent;
+    this->state = cpyMap(state, game->n, game->m);
+    this->player = player;
+    this->type = type;
+}
+
+Node::Node(int type, Node* parent, char player) {
+    this->game = parent->game;
+    this->type = type;
+    this->parent = parent;
+    this->state = cpyMap(parent->state, game->n, game->m);
+    this->player = player;
+}
+
+void Node::addChild(Node* node) {
+    if (children == NULL)
+        children = node;
     else {
         Node* tmp = children;
-        while (tmp->sibling != nullptr)
+        while (tmp->sibling != NULL) {
             tmp = tmp->sibling;
+        }
         tmp->sibling = node;
     }
 }
 
 void Node::deleteSubtree() {
     Node* elem = children;
-    while (elem != nullptr) {
+    while (children != NULL) {
         elem = children;
         children = children->sibling;
         delete elem;
-        elem = nullptr;
     }
+}
+
+Node::~Node() {
+    if (state) {
+        freeMemory(state, game->n);
+        state = NULL;
+    }
+    deleteSubtree();
 }
 
 char** createMap(int n, int m) {
@@ -149,11 +156,11 @@ char** createMap(int n, int m) {
     return map;
 }
 
-char** cpyMap(char** map,int N, int M) {
+char** cpyMap(char** map, int N, int M) {
     char** cpy = createMap(N, M);
-    for (int i = 0; i < N; i++)
-        for (int j = 0; j < M; j++)
-            cpy[i][j] = map[i][j];
+    for (int y = 0; y < N; y++)
+        for (int x = 0; x < M; x++)
+            cpy[y][x] = map[y][x];
     return cpy;
 }
 
@@ -165,16 +172,6 @@ void freeMemory(char** map, int n) {
             }
         }
         delete[] map;
-        map = nullptr;
-    }
-}
-
-void printMap(char** map, int n, int m) {
-    for (int y = 0; y < n; y++) {
-        for (int x = 0; x < m; x++) {
-            printf("%c ", map[y][x]);
-        }
-        printf("\n");
     }
 }
 
@@ -275,78 +272,50 @@ char changePlayer(char ActivePlayer) {
         return FIRST_PLAYER;
 }
 
-void solveGame(char** map, int N, int M, int K, char player) {
-    Node* root = new Node(Type::OR, nullptr, map, N, M, K,player);
+void solveGame(Game* G) {
+    Node* root = new Node(G, OR, NULL, G->map, G->player);
     PN(root, evaluateWin);
-    
     if (root->proof == 0) {
-        if (player == FIRST_PLAYER)
+        if (G->player == FIRST_PLAYER)
             printf("FIRST_PLAYER_WINS\n");
         else
             printf("SECOND_PLAYER_WINS\n");
     }
     else {
         delete root;
-        root = new Node(Type::OR, nullptr, map, N, M, K, player);
+        root = new Node(G, OR, NULL, G->map, G->player);
         PN(root, evaluateTie);
         if (root->proof == 0) {
             printf("BOTH_PLAYERS_TIE\n");
         }
         else {
-            if (player == FIRST_PLAYER)
-                printf("SECOND_PLAYER_WIN1S\n");
+            if (G->player == FIRST_PLAYER)
+                printf("SECOND_PLAYER_WINS\n");
             else
                 printf("FIRST_PLAYER_WINS\n");
-        } 
-    }
-    delete root;  
-}
-
-void evaluateWin(Node* root) {
-    if (checkWinCond(root->state, root->n, root->m, root->k, activeP)) {
-        root->value = Result::TRUE;
-    }
-    else if (checkWinCond(root->state, root->n, root->m, root->k, changePlayer(activeP))) {
-        root->value = Result::FALSE;
-    }
-    root->value = Result::UNKNOWN;
-}
-
-void evaluateTie(Node* root) {
-    if (countPosMoves(root->state, root->n, root->m) == 0) {
-        root->value = Result::TRUE;
-    }
-    else if (checkWinCond(root->state, root->n, root->m, root->k, changePlayer(activeP))) {
-        root->value = Result::FALSE;
-    }
-    root->value = Result::UNKNOWN;
-}
-
-void generateAllChildren(Node* node) {
-    for (int y = 0; y < node->n; y++) {
-        for (int x = 0; x < node->m; x++) {
-            if (node->state[y][x] == EMPTY) {
-                if (node->type == Type::OR) {
-                    node->state[y][x] = node->player;
-                    node->addChild(new Node(Type::AND, node, node->player));
-                }
-                else {
-                    node->state[y][x] = changePlayer(node->player);
-                    node->addChild(new Node(Type::OR, node, changePlayer(node->player)));
-                }
-                node->state[y][x] = EMPTY;
-            }
         }
     }
+    delete root;
 }
-//1
+
+void PN(Node* root, void(*evaluate)(Node*)) {
+    evaluate(root);
+    setProofAndDisproofNumbers(root);
+    Node* currentNode = root;
+    while (root->proof != 0 && root->disproof != 0) {
+        Node* mostProvingNode = selectMostProvingNode(currentNode);
+        expandNode(mostProvingNode, evaluate);
+        currentNode = updateAncestors(mostProvingNode, root);
+    }
+}
+
 void setProofAndDisproofNumbers(Node* node) {
-    if (node->expanded) {//Internal node;
-        if (node->type == Type::AND) {
+    if (node->expanded) //Internal node;
+        if (node->type == AND) {
             node->proof = 0;
             node->disproof = __INFINITY__;
             Node* n = node->children;
-            while (n != nullptr) {
+            while (n != NULL) {
                 node->proof = node->proof + n->proof;
                 if (n->disproof < node->disproof)
                     node->disproof = n->disproof;
@@ -357,91 +326,108 @@ void setProofAndDisproofNumbers(Node* node) {
             node->proof = __INFINITY__;
             node->disproof = 0;
             Node* n = node->children;
-            while (n != nullptr) {
+            while (n != NULL) {
                 node->disproof = node->disproof + n->disproof;
                 if (n->proof < node->proof)
                     node->proof = n->proof;
                 n = n->sibling;
             }
         }
-    }
-    else { //Leaf
+    else //Leaf
         switch (node->value) {
-            case Result::FALSE:
-                node->proof = __INFINITY__;
-                node->disproof = 0;
-                break;
-            case Result::TRUE:
-                node->proof = 0;
-                node->disproof = __INFINITY__;
-                break;
-            case Result::UNKNOWN:
-                node->proof = 1;
-                node->disproof = 1;
-                break;
+        case FALSE:
+            node->proof = __INFINITY__;
+            node->disproof = 0;
+            break;
+        case TRUE:
+            node->proof = 0;
+            node->disproof = __INFINITY__;
+            break;
+        case UNKNOWN:
+            node->proof = 1;
+            node->disproof = 1;
+            break;
         }
-    }
 }
-
-Node* selectMostProvingNode(Node* node) {    
+//Select the most-proving node
+Node* selectMostProvingNode(Node* node) {
     while (node->expanded) {
         Node* n = node->children;
-        if (node->type == Type::OR) { //OR Node
-            while (n->proof != node->proof) { //!
-                n = node->sibling;
-            }
-        }
-        else { //AND Node
-            while (n->disproof != node->disproof) {
-                n = node->sibling;
-            }
-        }
+        if (node->type == OR) //OR Node
+            while (n->proof != node->proof)
+                n = n->sibling;
+        else //AND Node
+            while (n->disproof != node->disproof)
+                n = n->sibling;
         node = n;
     }
     return node;
 }
-
-void expandNode(Node* node, void (*evaluate)(Node*)) {
+//Expand node
+void expandNode(Node* node, void(*evaluate)(Node*)) {
     generateAllChildren(node);
     Node* n = node->children;
-    while (n != nullptr) {
+    while (n != NULL) {
         evaluate(n);
         setProofAndDisproofNumbers(n);
-        if ((node->type == Type::OR && n->proof == 0) || (node->type == Type::AND && n->disproof == 0)) {
+        //Addition to original code
+        if ((node->type == OR && n->proof == 0) ||
+            (node->type == AND && n->disproof == 0))
             break;
-        }
         n = n->sibling;
     }
     node->expanded = true;
 }
-
+//Update ancestors
 Node* updateAncestors(Node* node, Node* root) {
     do {
-        int oldProof = node->proof; //!
-        int oldDisProof = node->disproof; //!
+        int oldProof = node->proof;
+        int oldDisProof = node->disproof;
         setProofAndDisproofNumbers(node);
         //No change on the path
-        if (node->proof == oldProof && node->disproof == oldDisProof) {
+        if (node->proof == oldProof &&
+            node->disproof == oldDisProof)
             return node;
-        }
         //Delete (dis)proved trees
-        if (node->proof == 0 || node->disproof == 0) {
+        if (node->proof == 0 || node->disproof == 0)
             node->deleteSubtree();
-        }
-        if (node == root) {
+        if (node == root)
             return node;
-        }
         node = node->parent;
     } while (true);
 }
 
-void PN(Node* root, void (*evaluate)(Node*)) {
-    evaluate(root);
-    setProofAndDisproofNumbers(root);
-    Node* currentNode = root;
-    while (root->proof != 0 && root->disproof != 0) {
-        Node* mostProvingNode = selectMostProvingNode(currentNode);
-        expandNode(mostProvingNode, evaluate);
-        currentNode = updateAncestors(mostProvingNode, root);
+void generateAllChildren(Node* node) {
+    for (int y = 0; y < node->game->n; y++) {
+        for (int x = 0; x < node->game->m; x++) {
+            if (node->state[y][x] == EMPTY) {
+                node->state[y][x] = node->player;
+                if (node->type == OR)
+                    node->addChild(new Node(AND, node, changePlayer(node->player)));
+                else
+                    node->addChild(new Node(OR, node, changePlayer(node->player)));
+                node->state[y][x] = EMPTY;
+            }
+        }
     }
+}
+
+void evaluateWin(Node* node) {
+    if (checkWinCond(node->state, node->game->n, node->game->m, node->game->k, node->game->player))
+        node->value = TRUE;
+    else if (countPosMoves(node->state, node->game->n, node->game->m) == 0
+        || checkWinCond(node->state, node->game->n, node->game->m, node->game->k, changePlayer(node->game->player)))
+        node->value = FALSE;
+    else
+        node->value = UNKNOWN;
+}
+
+void evaluateTie(Node* node) {
+    if (checkWinCond(node->state, node->game->n, node->game->m, node->game->k, changePlayer(node->game->player)))
+        node->value = FALSE;
+    else if (countPosMoves(node->state, node->game->n, node->game->m) == 0 ||
+        checkWinCond(node->state, node->game->n, node->game->m, node->game->k, node->game->player))
+        node->value = TRUE;
+    else
+        node->value = UNKNOWN;
 }
