@@ -50,6 +50,7 @@ struct Node {
 };
 
 char** createMap(int n, int m);
+char** copyMap(char** map, int N, int M);
 void freeMemory(char** map, int n);
 bool checkWinCond(char** map, int N, int M, int K, char ActivePlayer);
 bool checkHorizontalAxis(char** map, int N, int M, int K, char ActivePlayer);
@@ -60,8 +61,9 @@ bool checkAntiDiagonalsAxis(char** map, int N, int M, int K, char ActivePlayer);
 int countPosMoves(char** map, int N, int M);
 char changePlayer(char ActivePlayer);
 void solveGame(Game* G);
-char** cpyMap(char** map, int N, int M);
 
+///Based on "Proof-Number Search and its Variants" article
+///https://dke.maastrichtuniversity.nl/m.winands/documents/pnchapter.pdf
 void PN(Node* root, void(*evaluate)(Node*));
 void setProofAndDisproofNumbers(Node* node);
 Node* selectMostProvingNode(Node* node);
@@ -106,7 +108,7 @@ Game::~Game() {
 Node::Node(Game* G, int type, Node* parent, char** state, char player) {
     this->game = G;
     this->parent = parent;
-    this->state = cpyMap(state, game->n, game->m);
+    this->state = copyMap(state, game->n, game->m);
     this->player = player;
     this->type = type;
 }
@@ -115,7 +117,7 @@ Node::Node(int type, Node* parent, char player) {
     this->game = parent->game;
     this->type = type;
     this->parent = parent;
-    this->state = cpyMap(parent->state, game->n, game->m);
+    this->state = copyMap(parent->state, game->n, game->m);
     this->player = player;
 }
 
@@ -156,7 +158,7 @@ char** createMap(int n, int m) {
     return map;
 }
 
-char** cpyMap(char** map, int N, int M) {
+char** copyMap(char** map, int N, int M) {
     char** cpy = createMap(N, M);
     for (int y = 0; y < N; y++)
         for (int x = 0; x < M; x++)
@@ -310,7 +312,7 @@ void PN(Node* root, void(*evaluate)(Node*)) {
 }
 
 void setProofAndDisproofNumbers(Node* node) {
-    if (node->expanded) //Internal node;
+    if (node->expanded)
         if (node->type == AND) {
             node->proof = 0;
             node->disproof = __INFINITY__;
@@ -322,7 +324,7 @@ void setProofAndDisproofNumbers(Node* node) {
                 n = n->sibling;
             }
         }
-        else { //OR node
+        else {
             node->proof = __INFINITY__;
             node->disproof = 0;
             Node* n = node->children;
@@ -333,7 +335,7 @@ void setProofAndDisproofNumbers(Node* node) {
                 n = n->sibling;
             }
         }
-    else //Leaf
+    else
         switch (node->value) {
         case FALSE:
             node->proof = __INFINITY__;
@@ -349,28 +351,27 @@ void setProofAndDisproofNumbers(Node* node) {
             break;
         }
 }
-//Select the most-proving node
+
 Node* selectMostProvingNode(Node* node) {
     while (node->expanded) {
         Node* n = node->children;
-        if (node->type == OR) //OR Node
+        if (node->type == OR)
             while (n->proof != node->proof)
                 n = n->sibling;
-        else //AND Node
+        else
             while (n->disproof != node->disproof)
                 n = n->sibling;
         node = n;
     }
     return node;
 }
-//Expand node
+
 void expandNode(Node* node, void(*evaluate)(Node*)) {
     generateAllChildren(node);
     Node* n = node->children;
     while (n != NULL) {
         evaluate(n);
         setProofAndDisproofNumbers(n);
-        //Addition to original code
         if ((node->type == OR && n->proof == 0) ||
             (node->type == AND && n->disproof == 0))
             break;
@@ -378,17 +379,15 @@ void expandNode(Node* node, void(*evaluate)(Node*)) {
     }
     node->expanded = true;
 }
-//Update ancestors
+
 Node* updateAncestors(Node* node, Node* root) {
     do {
         int oldProof = node->proof;
         int oldDisProof = node->disproof;
         setProofAndDisproofNumbers(node);
-        //No change on the path
         if (node->proof == oldProof &&
             node->disproof == oldDisProof)
             return node;
-        //Delete (dis)proved trees
         if (node->proof == 0 || node->disproof == 0)
             node->deleteSubtree();
         if (node == root)
